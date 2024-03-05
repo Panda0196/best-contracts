@@ -1,0 +1,103 @@
+https://bscscan.com/token/0xe4c293eadbb9d72d68a680f1a66979726992c396
+
+////////////////////////////////////////////////////////////////////
+// LLGBase
+////////////////////////////////////////////////////////////////////
+
+1. ERC20 token
+2. Swap
+  In doTransfer(is called by transfer or transferFrom), Perform a swap if needed. 
+  Swap in the context of this contract is the process of swapping the contract's token balance 
+  with BNBs in order to provide liquidity and increase the reward pool
+- executeSwapIfNeeded: balanceOf(address(this)) > _tokenSwapThreshold & isSelling
+- executeSwap: swap for liquidity & reward pool to bnb
+
+Utils:
+interface IPancakeRouter01, IPancakeRouter02, IPancakeFactory
+- swapTokensForBNB: with PancakeSwap
+- swapBNBForTokens
+
+3. Fee
+- calculateFeeRate: Calc transfer tx fee (base on sender & receiver)
+- In executeSwap, sub fee
+
+
+////////////////////////////////////////////////////////////////////
+// LLG = Inherit LLGBase & Implements rewards & burns
+////////////////////////////////////////////////////////////////////
+
+DETECT WHETHER ADDR IS CONTRACT OR NOT
+
+	function isContract(address account) public view returns (bool) {
+        uint256 size;
+        // solhint-disable-next-line no-inline-assembly
+        assembly { size := extcodesize(account) }
+        return size > 0;
+	}
+
+
+ANTI BOT
+
+1.  contract Ownable
+2.  contract ReentrancyGuard
+3. 
+	uint256 public antiBlockNum = 3;
+	bool public antiEnabled = true;
+	uint256 private antiBotTimestamp = block.timestamp + antiBlockNum;
+
+    function onBeforeCalculateFeeRate() internal override view returns (bool) {
+		if (antiEnabled && block.timestamp < antiBotTimestamp) {
+			return true;
+		}
+	}
+
+
+PROCESS ITEMS WITH QUEUE - SEND REWARD
+
+    address[] _rewardClaimQueue;
+    mapping(address => uint) _rewardClaimQueueIndices; // Index of items, need for dequeue
+    uint256 private _rewardClaimQueueIndex; // Index of item to process
+    mapping(address => bool) _addressesInRewardClaimQueue; // Mapping between addresses and false/true depending on whether they are queued up for auto-claim or not
+    bool private _processingQueue; //Flag that indicates whether the queue is currently being processed and sending out rewards
+
+    updateAutoClaimQueue: Push item to send rewards (onTransfer...)
+    processRewardClaimQueue: Process items of queue - send rewards (onBeforeTransfer...)
+
+
+REWARD LIMIT & CYCLE
+
+    1. Cycle
+
+        uint256 private _rewardCyclePeriod = 43200; // The duration of the reward cycle (e.g. can claim rewards once 12 hours)
+        uint256 private _rewardCycleExtensionThreshold; // If someone sends or receives more than a % of their balance in a transaction, their reward cycle date will increase accordingly
+	    mapping(address => uint256) private _nextAvailableClaimDate; // The next available reward claim date for each address
+
+        mapping(address => bool) private _addressesExcludedFromRewards; // The list of addresses excluded from rewards
+	    mapping(address => mapping(address => bool)) private _rewardClaimApprovals; //Used to allow an address to claim rewards on behalf of someone else
+        mapping(address => uint256) private _claimRewardAsTokensPercentage; //Allows users to optionally use a % of the reward pool to buy LLG automatically
+
+        uint256 private _globalRewardDampeningPercentage = 3; // Rewards are reduced by 3% at the start to fill the main BNB pool faster and ensure consistency in rewards
+        uint256 private _mainBnbPoolSize = 5000 ether; // Any excess BNB after the main pool will be used as reserves to ensure consistency in rewards
+        bool private _rewardAsTokensEnabled; //If enabled, the contract will give out tokens instead of BNB according to the preference of each user
+
+        claimReward(user) -> _doClaimReward(user) -> calculateClaimRewards -> calculateBNBReward
+        calculateBNBReward: If an address is holding X percent of the supply, then it can claim up to X percent of the reward pool
+        calculateRewardCycleExtension: This function calculates how much (and if) the reward cycle of an address should increase based on its current balance and the amount transferred in a transaction
+
+    2. Limit
+
+        onBeforeTransfer
+        - Extend the reward cycle according to the amount transferred. (If amount * 100 / balance > _rewardCycleExtensionThreshold)
+        If someone sends or receives more than 15% of their balance in a transaction, their reward cycle date will increase accordingly
+
+
+BURN TOKEN
+
+	uint256 private _gradualBurnMagnitude; // The contract can optionally burn tokens (By buying them from reward pool).  This is the magnitude of the burn (1 = 0.01%).
+	uint256 private _gradualBurnTimespan = 1 days; //Burn every 1 day by default
+	uint256 private _lastBurnDate; //The last burn date
+    address public constant BURN_WALLET = 0x000000000000000000000000000000000000dEaD; //The address that keeps track of all tokens burned
+
+    processGradualBurn - When someone sell the token to SwapPair, 
+    buyAndBurn - Buy & burn manually
+    
