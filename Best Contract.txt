@@ -1,0 +1,6 @@
+https://polygonscan.com/address/0xa8f3cd1a2863775baa921147c602965a493dc784 VestingLFI, LFI Token
+https://polygonscan.com/address/0x58eda02e51dbbfd5190f779573bb3efbd41afc68 TransparentUpgradeableProxy
+https://polygonscan.com/address/0x20d75ae2f06ceaa893816c37f7a13f1800964073 ProxyAdmin
+
+https://etherscan.io/address/0x0de2669e8a7a6f6cc0cbd3cf2d1eead89e243208 ProxyMultiSig
+https://bscscan.com/token/0xe4c293eadbb9d72d68a680f1a66979726992c396 LLG Token
